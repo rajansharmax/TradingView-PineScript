@@ -1,0 +1,73 @@
+//@version=5
+indicator("Bullish Flag Pattern", overlay=true)
+
+// User inputs
+flagDepth = input.int(30, "Flag Depth", minval=10)
+deviation = input.float(1.5, "Permissible Deviation (%)", minval=0.1)
+priceTargets = input.string("All", "Price Targets", options=["All", "Only Awaiting", "Awaiting and Reached", "None"])
+patterns = input.string("All", "Patterns", options=["All", "Awaiting and Reached", "Only Awaiting", "Last Awaiting"])
+
+// Helper functions to find pivots
+find_pivot_up(n) =>
+    local_max = high[n]
+    for i = 1 to n
+        if high[n - i] > local_max
+            local_max := na
+    local_max
+
+find_pivot_down(n) =>
+    local_min = low[n]
+    for i = 1 to n
+        if low[n - i] < local_min
+            local_min := na
+    local_min
+
+// Finding pivots
+pivot_up = find_pivot_up(5)
+pivot_down = find_pivot_down(5)
+
+// Identifying flagpole
+var float flagpole_start = na
+var float flagpole_end = na
+if (not na(pivot_up) and not na(pivot_down))
+    if (pivot_up > pivot_down)
+        flagpole_start := pivot_down
+        flagpole_end := pivot_up
+
+// Identifying flag channel
+var float flag_channel_high = na
+var float flag_channel_low = na
+if (not na(flagpole_end))
+    flag_channel_high := ta.highest(high, flagDepth)
+    flag_channel_low := ta.lowest(low, flagDepth)
+
+// Checking permissible deviation
+flag_middle = (flag_channel_high + flag_channel_low) / 2
+is_valid_flag = (flag_channel_low >= flag_middle * (1 - deviation / 100))
+
+// Status determination
+var float target_price = na
+if (is_valid_flag)
+    target_price := flag_channel_high + (flagpole_end - flagpole_start)
+
+// Plotting
+plotshape(series=is_valid_flag ? flagpole_start : na, location=location.belowbar, color=color.green, style=shape.labelup, text="Flag Start")
+plotshape(series=is_valid_flag ? flagpole_end : na, location=location.abovebar, color=color.red, style=shape.labeldown, text="Flag End")
+plot(series=target_price, title="Target Price", color=color.blue, style=plot.style_line)
+
+// Status labels
+var label status_label = na
+if (is_valid_flag)
+    if (na(status_label))
+        status_label := label.new(x=bar_index, y=close, text="Awaiting", color=color.yellow, textcolor=color.black)
+    if (close >= target_price)
+        label.set_text(status_label, "Reached")
+        label.set_color(status_label, color.green)
+    if (low <= flag_middle)
+        label.set_text(status_label, "Failed")
+        label.set_color(status_label, color.red)
+
+// Alerts
+alertcondition(not na(flagpole_start) and is_valid_flag, title="New Pattern", message="New Bullish Flag pattern detected.")
+alertcondition(is_valid_flag and close >= target_price, title="Pattern Reached", message="Bullish Flag pattern reached target.")
+alertcondition(is_valid_flag and low <= flag_middle, title="Pattern Failed", message="Bullish Flag pattern failed.")
